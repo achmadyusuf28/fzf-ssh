@@ -1,0 +1,68 @@
+#!/bin/bash
+# modified script from https://github.com/mislav/gh-branch/blob/main/gh-branch
+
+set -e
+
+help() {
+  cat <<EOF
+Usage: fzssh <search-term>
+Displays an interactive ssh options that lists hosts from ssh-config
+
+Dependencies: fzf
+installation: https://github.com/junegunn/fzf
+EOF
+}
+
+if [[ "$1" != "" ]]; then
+    query="$1"
+else
+    query=
+fi
+
+static=
+while [ $# -gt 0 ]; do
+  case "$1" in
+  -h|--help)
+    help
+    exit 0
+    ;;
+  --static)
+    static=1
+    ;;
+  esac
+  shift
+done
+
+
+config_info() {
+  sed -rn 's/^\s*Host\s+([^\*].*)\s*/\1/ip' ~/.ssh/*config*
+}
+
+render() {
+  branches="$(config_info)" || return 1
+  sort -k2 -r <<<"$branches" | tableize
+}
+
+tableize() {
+  column -t -s$'\t'
+}
+
+if [ -n "$static" ]; then
+  render
+  exit 0
+fi
+
+if ! type -p fzf >/dev/null; then
+  echo "error: install \`fzf\` to use this command" >&2
+  exit 1
+fi
+
+choose() {
+  local rendered
+  rendered="$(render)" || return 1
+  fzf --ansi --query="$query" <<< "$rendered"
+}
+
+selected="$(choose)"
+[ -n "$selected" ] || exit 1
+TERM=xterm-256color ssh "${selected%% *}"
